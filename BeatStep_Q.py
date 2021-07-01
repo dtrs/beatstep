@@ -29,8 +29,8 @@ CHANNEL = 9
 # the used memory-slot to store the configurations
 MEMORY_SLOT = 8
 
-SETUP_HARDWARE_DELAY = 8
-INDIVIDUAL_MESSAGE_DELAY = 0.001
+SETUP_HARDWARE_DELAY = 4
+INDIVIDUAL_MESSAGE_DELAY = 1 #set to .9 to get drop outs
 
 def split_list(l, size):
     for i in range(0, len(l), size):
@@ -64,38 +64,41 @@ class BeatStep_Q(ControlSurface):
     def port_settings_changed(self):
         #super(BeatStep_Q, self).port_settings_changed()
         # self._start_hardware_setup()
-        self._set_init_color_sequence()
-        self._setup_hardware(delay=.5, start_delay=SETUP_HARDWARE_DELAY)
 
+        self._reset_colors()
+        #self._set_init_color_sequence()
         self._collect_setup_messages()
+        self._reset_colors()
+
         self._setup_hardware(start_delay=SETUP_HARDWARE_DELAY)
 
-    def _setup_hardware(self, delay=None, start_delay=0.):
-        if delay is None:
-            delay = INDIVIDUAL_MESSAGE_DELAY
-
+    def _setup_hardware(self, delay=INDIVIDUAL_MESSAGE_DELAY, start_delay=.0):
         # add individual message delays
-        i = 1
+        i = 0
         with self.component_guard():
             while len(self._messages_to_send) > 0:
                 msg = self._messages_to_send.pop(0)
-                self.schedule_message(i * delay + start_delay,
-                                      partial(self._send_midi, msg))
                 i += 1
+                """
+                API methods:
+                def schedule_message(self, delay_in_ticks, callback, parameter = None)
+                def _send_midi(self, midi_event_bytes, optimized = True)
+                """
+                self.schedule_message(i * delay + start_delay,
+                                      partial(self._send_midi, msg, optimized=False))
+                #self._send_midi(msg, optimized=False)
 
     def _collect_setup_messages(self, layer="init"):
         if layer == "init":
+            self._setup_control_buttons()
             self._setup_buttons_and_encoders()
-            self._setup_control_buttons_and_encoders()
 
             # set pad velocity to 0 (e.g. linear) on startup
             self._messages_to_send.append(self.QS.set_B_velocity(0))
             # set encoder acceleration to "slow" on startup
             self._messages_to_send.append(self.QS.set_E_acceleration(0))
 
-
-    def _set_init_color_sequence(self):
-
+    def _set_init_color_sequence(self, start_delay=.0):
         offmsgs = [self.QS.set_B_color(i, 0) for i in range(1, 17)]
         rmsgs = [self.QS.set_B_color(i, 1) for i in range(1, 17)]
         bmsgs = [self.QS.set_B_color(i, 16) for i in range(1, 17)]
@@ -104,7 +107,11 @@ class BeatStep_Q(ControlSurface):
         for msg in offmsgs + rmsgs + bmsgs + mmsgs + offmsgs:
             self._messages_to_send.append(msg)
 
-    def _setup_control_buttons_and_encoders(self):
+    def _reset_colors(self):
+        for msg in [self.QS.set_B_color(i, 0) for i in range(1, 17)]:
+            self._messages_to_send.append(msg)
+
+    def _setup_control_buttons(self):
         """
         this function is only called once when the BeatStep is plugged in to
         ensure correct assignments of function-buttons and transpose encoder
@@ -113,37 +120,44 @@ class BeatStep_Q(ControlSurface):
         self._messages_to_send.append(self.QS.set_B_mode("shift", 8))
         self._messages_to_send.append(self.QS.set_B_channel("shift", CHANNEL))
         self._messages_to_send.append(self.QS.set_B_behaviour("shift", 1))
+        self._messages_to_send.append(self.QS.set_B_color(1, 1))
 
         # set stop button to note-mode
         self._messages_to_send.append(self.QS.set_B_mode("stop", 8))
         self._messages_to_send.append(self.QS.set_B_channel("stop", CHANNEL))
         self._messages_to_send.append(self.QS.set_B_behaviour("stop", 1))
+        self._messages_to_send.append(self.QS.set_B_color(2, 1))
 
         # set play button to note-mode
         self._messages_to_send.append(self.QS.set_B_mode("play", 8))
         self._messages_to_send.append(self.QS.set_B_channel("play", CHANNEL))
         self._messages_to_send.append(self.QS.set_B_behaviour("play", 1))
+        self._messages_to_send.append(self.QS.set_B_color(3, 1))
 
         # set cntrl/seq button to note-mode
         self._messages_to_send.append(self.QS.set_B_mode("cntrl", 8))
         self._messages_to_send.append(self.QS.set_B_channel("cntrl", CHANNEL))
         # set button behaviour to toggle
         self._messages_to_send.append(self.QS.set_B_behaviour("cntrl", 0))
+        self._messages_to_send.append(self.QS.set_B_color(4, 1))
 
         # set chan button to note mode
         self._messages_to_send.append(self.QS.set_B_mode("chan", 8))
         self._messages_to_send.append(self.QS.set_B_channel("chan", CHANNEL))
         self._messages_to_send.append(self.QS.set_B_behaviour("chan", 1))
+        self._messages_to_send.append(self.QS.set_B_color(5, 1))
 
         # set store button to note mode
         self._messages_to_send.append(self.QS.set_B_mode("store", 8))
         self._messages_to_send.append(self.QS.set_B_channel("store", CHANNEL))
         self._messages_to_send.append(self.QS.set_B_behaviour("store", 1))
+        self._messages_to_send.append(self.QS.set_B_color(6, 1))
 
         # set store button to note mode
         self._messages_to_send.append(self.QS.set_B_mode("recall", 8))
         self._messages_to_send.append(self.QS.set_B_channel("recall", CHANNEL))
         self._messages_to_send.append(self.QS.set_B_behaviour("recall", 1))
+        self._messages_to_send.append(self.QS.set_B_color(7, 1))
 
         # set transpose encoder channel
         self._messages_to_send.append(self.QS.set_E_channel("transpose", CHANNEL))
@@ -151,9 +165,10 @@ class BeatStep_Q(ControlSurface):
         # set encoder cc to something else than the shift-encoder cc
         # (4 is unused since it would represent the ext/sync button)
         self._messages_to_send.append(self.QS.set_E_cc("transpose", 4))
+        self._messages_to_send.append(self.QS.set_B_color(8, 1))
 
     def _setup_buttons_and_encoders(self):
-        # for all buttons and encoders
+        # for all pads
         for i in range(1, 17):
             # set pad to note-mode
             self._messages_to_send.append(self.QS.set_B_mode(i, 9))
@@ -161,7 +176,10 @@ class BeatStep_Q(ControlSurface):
             self._messages_to_send.append(self.QS.set_B_channel(i, CHANNEL))
             # set pad behaviour to toggle
             self._messages_to_send.append(self.QS.set_B_behaviour(i, 1))
+            self._messages_to_send.append(self.QS.set_B_color(i, 16))
 
+        # for all encoders
+        for i in range(1, 17):
             # set encoder channel
             self._messages_to_send.append(self.QS.set_E_channel(i, CHANNEL))
             # set all encoders to relative-mode 2
@@ -170,10 +188,10 @@ class BeatStep_Q(ControlSurface):
             self._messages_to_send.append(self.QS.set_E_mode(i, 1))
             # set midi cc id's for all encoders
             self._messages_to_send.append(self.QS.set_E_cc(i, ENCODER_MSG_IDS[i - 1]))
+            self._messages_to_send.append(self.QS.set_B_color(i, 17))
 
 
     def _set_control_mode_msgs(self):
-
         # for all buttons
         for i in range(1, 17):
             # set pad to cc-mode
@@ -187,34 +205,35 @@ class BeatStep_Q(ControlSurface):
             self._messages_to_send.append(self.QS.set_E_channel(i, CHANNEL))
             # set all encoders to relative-mode 2
             self._messages_to_send.append(self.QS.set_E_behaviour(i, 2))
+            self._messages_to_send.append(self.QS.set_B_color(i, 17))
 
         # set transpose encoder channel to follow global channel
         self._messages_to_send.append(self.QS.set_E_channel("transpose", CHANNEL))
         # set transpose encoder to relative mode 2
         self._messages_to_send.append(self.QS.set_E_behaviour("transpose", 2))
 
-
-    def _do_activate_control_mode(self):
-        self._set_control_mode_msgs()
-        self._setup_hardware()
-
-
-    def _deactivate_control_mode(self):
-        # recall state before layer was activated
-        self._send_midi(self.QS.recall_preset(MEMORY_SLOT))
-
-        # set pad velocity
-        self._send_midi(self.QS.set_B_velocity(self._control_component._pad_velocity))
-
-        self.control_layer_active = False
-
     def _activate_control_mode(self):
+        self.show_message("Activate control mode")
+
         # only save the current configuration if no control-layer is active
         if not self.control_layer_active:
-            self._send_midi(self.QS.store_preset(MEMORY_SLOT))
+            self._messages_to_send.append(self.QS.store_preset(MEMORY_SLOT))
 
-        self._do_activate_control_mode()
+        self._set_control_mode_msgs()
+        self._reset_colors()
+        self._setup_hardware()
         self.control_layer_active = True
+
+    def _deactivate_control_mode(self):
+        self.show_message("Deactivate control mode")
+
+        # recall state before layer was activated
+        self._messages_to_send.append(self.QS.recall_preset(MEMORY_SLOT))
+        # set pad velocity
+        self._messages_to_send.append(self.QS.set_B_velocity(self._control_component._pad_velocity))
+
+        self._setup_hardware()
+        self.control_layer_active = False
 
     def _create_controls(self):
         self._play_button = ButtonElement(
